@@ -382,3 +382,17 @@ export const triggerFetchAll = async (): Promise<{ success: boolean; jobId: stri
   const response = await api.post<{ success: boolean; jobId: string; message: string }>('/fetch/all');
   return response.data;
 };
+
+// Resume generation API
+export const generateResumeSummary = async (
+  repos: string[],
+  periodFilter?: string,
+  selectedCategories?: string[]
+): Promise<{ success: boolean; content: string }> => {
+  const response = await api.post<{ success: boolean; content: string }>('/generate-resume-summary', {
+    repos,
+    periodFilter,
+    selectedCategories,
+  });
+  return response.data;
+};

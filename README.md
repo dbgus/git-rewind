@@ -1,4 +1,4 @@
-# GitHub Commit Fetcher
+# GitHub rewind
 
 A full-stack web application for collecting and analyzing GitHub commit history. Visualize personal and team commit activities with AI-powered commit analysis, tag management, and detailed statistical dashboards.
 
@@ -17,6 +17,7 @@ A full-stack web application for collecting and analyzing GitHub commit history.
 ## Tech Stack
 
 ### Backend
+
 - **Node.js + TypeScript**: Server logic
 - **Express**: REST API server
 - **better-sqlite3**: Data storage (SQLite)
@@ -24,6 +25,7 @@ A full-stack web application for collecting and analyzing GitHub commit history.
 - **Mistral AI**: Commit content analysis
 
 ### Frontend
+
 - **React 19 + TypeScript**: UI framework
 - **Vite**: Build tool
 - **Tailwind CSS**: Styling
@@ -235,6 +237,7 @@ See `server/src/index.ts` for complete API documentation.
 ### AI Commit Analysis
 
 Using Mistral AI:
+
 - Automatic commit summarization
 - Change analysis
 - Importance evaluation

@@ -782,6 +782,168 @@ app.get("/api/tags/:id/commits", (req: Request, res: Response) => {
   }
 });
 
+// Generate resume-ready work summary with AI
+app.post("/api/generate-resume-summary", async (req: Request, res: Response) => {
+  try {
+    const { repos, periodFilter, selectedCategories } = req.body;
+
+    if (!repos || !Array.isArray(repos) || repos.length === 0) {
+      return res.status(400).json({ error: "repos array is required" });
+    }
+
+    const db = new Database(dbPath);
+    const config = getConfig(db);
+
+    if (!config.mistral_api_key) {
+      db.close();
+      return res.status(503).json({
+        error: "Mistral API key not configured",
+        message: "Please configure Mistral API key in settings to use AI-powered resume generation.",
+      });
+    }
+
+    // DB에서 선택된 레포지토리의 커밋 데이터 조회
+    const repoConditions = repos.map(() => "repo = ?").join(" OR ");
+    const query = `
+      SELECT
+        repo,
+        message,
+        author,
+        date,
+        additions,
+        deletions,
+        total_changes,
+        files_changed,
+        ai_summary
+      FROM commits
+      WHERE (${repoConditions})
+        AND ai_summary IS NOT NULL
+      ORDER BY date DESC
+    `;
+
+    const commits = db.prepare(query).all(...repos) as any[];
+
+    // 기간 필터 적용
+    let filteredCommits = commits;
+    if (periodFilter && periodFilter !== "all") {
+      const now = new Date();
+      const monthsAgo = periodFilter === "3months" ? 3 : periodFilter === "6months" ? 6 : 12;
+      const cutoffDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate());
+
+      filteredCommits = commits.filter((c) => new Date(c.date) >= cutoffDate);
+    }
+
+    db.close();
+
+    if (filteredCommits.length === 0) {
+      return res.status(400).json({ error: "No commits found for selected repositories" });
+    }
+
+    // 레포지토리별로 그룹화 및 요약
+    const repoMap = new Map<string, any[]>();
+    filteredCommits.forEach((commit) => {
+      if (!repoMap.has(commit.repo)) {
+        repoMap.set(commit.repo, []);
+      }
+      repoMap.get(commit.repo)!.push(commit);
+    });
+
+    const workSummary = Array.from(repoMap.entries()).map(([repo, commits]) => {
+      const totalCommits = commits.length;
+      const totalChanges = commits.reduce((sum, c) => sum + c.total_changes, 0);
+      const totalAdditions = commits.reduce((sum, c) => sum + c.additions, 0);
+      const totalDeletions = commits.reduce((sum, c) => sum + c.deletions, 0);
+
+      const dates = commits.map((c) => new Date(c.date).getTime());
+      const earliest = new Date(Math.min(...dates));
+      const latest = new Date(Math.max(...dates));
+      const period = `${earliest.toLocaleDateString("ko-KR", { year: "numeric", month: "long" })} ~ ${latest.toLocaleDateString("ko-KR", { year: "numeric", month: "long" })}`;
+
+      // AI 요약들을 샘플링 (너무 많으면 일부만)
+      const sampleSummaries = commits
+        .slice(0, 30)
+        .map((c) => c.ai_summary)
+        .filter(Boolean);
+
+      return {
+        repo,
+        period,
+        totalCommits,
+        totalChanges,
+        totalAdditions,
+        totalDeletions,
+        sampleSummaries,
+      };
+    });
+
+    const mistralClient = new Mistral({ apiKey: config.mistral_api_key });
+
+    // AI 프롬프트 구성
+    const prompt = `다음은 개발자의 프로젝트 활동 내역입니다. 이를 이력서에 사용할 수 있도록 전문적이고 간결하게 정리해주세요.
+
+입력 데이터:
+${JSON.stringify(workSummary, null, 2)}
+
+다음 형식으로 마크다운을 작성해주세요:
+
+# 프로젝트 경험 및 기술 역량
+
+## 📊 핵심 역량 요약
+- 주요 기술 스택과 경험을 2-3줄로 요약
+
+---
+
+## 프로젝트별 상세 내역
+
+각 프로젝트마다:
+
+### 📦 [프로젝트명]
+
+**기간**: [활동 기간]
+**기여도**: [커밋 수]개 커밋, [변경 라인 수] 변경
+
+**역할 및 성과**:
+- 주요 성과 1 (구체적인 수치 포함)
+- 주요 성과 2 (구체적인 수치 포함)
+- 주요 성과 3 (구체적인 수치 포함)
+
+**기술 스택**: [AI 요약에서 추출한 기술들]
+
+**주요 구현 내용**:
+- [간결한 설명, 1-2줄]
+- [간결한 설명, 1-2줄]
+
+---
+
+작성 시 주의사항:
+1. sampleSummaries에 있는 AI 요약들을 분석해서 실제로 수행한 작업을 파악
+2. 기술적 성과를 구체적인 수치(커밋 수, 변경 라인 수 등)와 함께 표현
+3. "~했습니다" 보다는 "~하여 [결과]를 달성" 형태로 작성
+4. 각 항목은 간결하게 1-2줄 이내로
+5. 이력서에 바로 복사-붙여넣기 할 수 있도록 전문적인 톤 유지
+6. 불필요한 커밋 해시나 기술적 세부사항은 제외
+7. AI 요약에서 언급된 기술 스택과 구현 내용을 중심으로 정리`;
+
+    const chatResponse = await mistralClient.chat.complete({
+      model: "mistral-large-latest",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const resumeContent = chatResponse.choices?.[0]?.message?.content || "";
+
+    res.json({
+      success: true,
+      content: resumeContent,
+    });
+  } catch (error: any) {
+    console.error("Resume generation error:", error);
+    res.status(500).json({
+      error: "Failed to generate resume summary",
+      details: error.message,
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

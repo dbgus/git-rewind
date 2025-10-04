@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchRepos, fetchCommits, type Commit } from "./api";
+import {
+  fetchRepos,
+  fetchCommits,
+  generateResumeSummary,
+  type Commit,
+} from "./api";
+import Toast from "./components/Toast";
 
 interface WorkDetail {
   title: string;
@@ -37,6 +43,10 @@ function WorkSummary() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set()
   );
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info" | "warning";
+  } | null>(null);
 
   useEffect(() => {
     loadWorkSummary();
@@ -556,13 +566,16 @@ function WorkSummary() {
     return csv;
   };
 
-  const downloadFile = () => {
+  const downloadFile = async () => {
     const selectedRepoWorks = filteredRepoWorks.filter((rw) =>
       selectedRepos.has(rw.repo)
     );
 
     if (selectedRepoWorks.length === 0) {
-      alert("Please select repositories to export.");
+      setToast({
+        message: "⚠️ Please select repositories to export.",
+        type: "warning",
+      });
       return;
     }
 
@@ -570,28 +583,61 @@ function WorkSummary() {
     let mimeType: string;
     let extension: string;
 
-    switch (exportFormat) {
-      case "json":
-        content = generateJSON(selectedRepoWorks);
-        mimeType = "application/json";
-        extension = "json";
-        break;
-      case "csv":
-        content = generateCSV(selectedRepoWorks);
-        mimeType = "text/csv";
-        extension = "csv";
-        break;
-      default:
+    // Markdown 포맷인 경우 AI로 이력서용으로 재작성
+    if (exportFormat === "markdown") {
+      try {
+        // Toast로 진행 상태 표시
+        setToast({
+          message: "🤖 Generating resume document with AI... Please wait.",
+          type: "info",
+        });
+
+        // 선택된 레포지토리 이름만 전달
+        const selectedRepoNames = selectedRepoWorks.map((rw) => rw.repo);
+        const categories =
+          selectedCategories.size > 0
+            ? Array.from(selectedCategories)
+            : undefined;
+
+        const result = await generateResumeSummary(
+          selectedRepoNames,
+          periodFilter !== "all" ? periodFilter : undefined,
+          categories
+        );
+        content = result.content;
+        mimeType = "text/markdown";
+        extension = "md";
+
+        setToast({
+          message: "Resume document generated successfully!",
+          type: "success",
+        });
+      } catch (error) {
+        console.error("AI generation failed:", error);
+        setToast({
+          message:
+            "❌ AI generation failed. Downloading default markdown instead.",
+          type: "error",
+        });
         content = generateMarkdown(selectedRepoWorks);
         mimeType = "text/markdown";
         extension = "md";
+      }
+    } else if (exportFormat === "json") {
+      content = generateJSON(selectedRepoWorks);
+      mimeType = "application/json";
+      extension = "json";
+    } else {
+      content = generateCSV(selectedRepoWorks);
+      mimeType = "text/csv";
+      extension = "csv";
     }
 
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `work-summary-${
+    a.download = `resume-${
       new Date().toISOString().split("T")[0]
     }.${extension}`;
     document.body.appendChild(a);
@@ -950,6 +996,15 @@ function WorkSummary() {
             </>
           )}
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          duration={toast.type === "info" ? 0 : 5000}
+        />
       )}
     </div>
   );
