@@ -1,0 +1,30 @@
+# Node modules
+**/node_modules
+**/dist
+
+# Environment files
+.env
+.env.local
+**/.env
+**/.env.local
+
+# Git
+.git
+.gitignore
+
+# Logs
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# OS files
+.DS_Store
+
+# Data directory (will be mounted as volume)
+data
+
+# Client build output
+client/dist
+
+# Documentation
+README.md

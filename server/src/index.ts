@@ -59,9 +59,10 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize database tables on startup
-const dbPath = process.env.NODE_ENV === 'production'
-  ? '/app/data/commits.db'
-  : path.join(__dirname, "../../data/commits.db");
+const dbPath =
+  process.env.NODE_ENV === "production"
+    ? "/app/data/commits.db"
+    : path.join(__dirname, "../../data/commits.db");
 const initDb = new Database(dbPath);
 initCommitsTables(initDb);
 initConfigTable(initDb);
@@ -85,7 +86,9 @@ jobQueue.setWorker(async (job: Job) => {
 
     if (!config.github_token) {
       db.close();
-      throw new Error("GitHub token not configured. Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings.");
+      throw new Error(
+        "GitHub token not configured. Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings."
+      );
     }
 
     let mistralClient = null;
@@ -184,14 +187,21 @@ jobQueue.setWorker(async (job: Job) => {
     updateConfigs(db, { days_back: null });
     db.close();
 
-    // Run index.js script directly using child_process
-    const scriptPath = path.join(__dirname, "../../index.js");
+    // Run cli.js script directly using child_process
+    // Docker: /app/cli.js, Local: ../../cli.js from dist folder
+    const scriptPath = process.env.NODE_ENV === 'production'
+      ? '/app/cli.js'
+      : path.join(__dirname, "../../cli.js");
+
+    const cwd = process.env.NODE_ENV === 'production'
+      ? '/app'
+      : path.join(__dirname, "../..");
 
     return new Promise((resolve, reject) => {
-      console.log("🚀 Starting full fetch script (index.js)...");
+      console.log("🚀 Starting full fetch script (cli.js)...");
 
       const child = spawn("node", [scriptPath], {
-        cwd: path.join(__dirname, "../.."),
+        cwd: cwd,
         env: process.env,
       });
 
@@ -355,7 +365,8 @@ app.get("/api/github/repos", async (req: Request, res: Response) => {
       db.close();
       return res.status(503).json({
         error: "GitHub token not configured",
-        message: "Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings."
+        message:
+          "Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings.",
       });
     }
 
@@ -385,7 +396,8 @@ app.get("/api/github/org/:org/repos", async (req: Request, res: Response) => {
       db.close();
       return res.status(503).json({
         error: "GitHub token not configured",
-        message: "Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings."
+        message:
+          "Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings.",
       });
     }
 
@@ -504,7 +516,8 @@ app.get("/api/github/rate-limit", async (_req: Request, res: Response) => {
       db.close();
       return res.status(503).json({
         error: "GitHub token not configured",
-        message: "Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings."
+        message:
+          "Please generate a GitHub Personal Access Token at https://github.com/settings/tokens and configure it in the settings.",
       });
     }
 
@@ -638,12 +651,10 @@ app.delete("/api/commits/by-authors", (req: Request, res: Response) => {
     res.json({ deletedCount, authors });
   } catch (error) {
     console.error("Delete commits error:", error);
-    res
-      .status(500)
-      .json({
-        error: "Failed to delete commits",
-        details: error instanceof Error ? error.message : String(error),
-      });
+    res.status(500).json({
+      error: "Failed to delete commits",
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 
