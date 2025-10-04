@@ -57,7 +57,63 @@ github-commit-fetcher/
 └── .env                  # Environment variables
 ```
 
-## Installation & Setup
+## Quick Start with Docker Compose (Recommended)
+
+The easiest way to get started:
+
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd github-commit-fetcher
+
+# 2. Build and start services
+docker compose up --build
+
+# 3. Open in browser
+# Client: http://localhost:5173
+# Server: http://localhost:3001
+```
+
+That's it! The application will start with both frontend and backend services.
+
+### Environment Configuration (Optional)
+
+Create a `.env` file in the root directory if you want to pre-configure settings:
+
+```env
+# GitHub Personal Access Token
+GITHUB_TOKEN=ghp_your_token_here
+
+# GitHub username
+GITHUB_USERNAME=your-username
+
+# Mistral AI API Key (optional)
+MISTRAL_API_KEY=your_mistral_key_here
+```
+
+Otherwise, you can configure these settings through the web UI after startup.
+
+### Docker Commands
+
+```bash
+# Start services
+docker compose up -d
+
+# Stop services
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Rebuild after code changes
+docker compose up --build
+```
+
+---
+
+## Manual Installation & Setup
+
+If you prefer to run without Docker:
 
 ### 1. Install Dependencies
 
